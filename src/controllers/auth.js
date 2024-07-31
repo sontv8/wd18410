@@ -1,6 +1,7 @@
-import { registerSchema } from "../schemas/auth";
+import { registerSchema, signinSchema } from "../schemas/auth";
 import User from "../models/auth";
 import bcryptjs from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 export const signup = async (request, response) => {
   // lay du lieu user gui len
@@ -31,12 +32,36 @@ export const signup = async (request, response) => {
   response.status(201).json({ message: "Dang ky thanh cong", user });
 };
 
-export const signin = (request, response) => {
+export const signin = async (request, response) => {
   // lay du lieu user gui len
+  const { email, password } = request.body;
   // kiem tra tinh hop le cua du lieu
+  const { error } = signinSchema.validate(request.body, { abortEarly: false });
+  if (error) {
+    const message = error.details.map((message) => message.message);
+    return response.status(400).json({ message });
+  }
   // kiem tra xem user co ton tai hay khong
+  const existUser = await User.findOne({ email: email });
   // neu user khong ton tai thi tra ve thong bao loi
+  if (!existUser) {
+    return response.status(400).json({ message: "Email khong ton tai" });
+  }
   // neu user ton tai thi kiem tra mat khau
+  const isValidPassword = await bcryptjs.compare(password, existUser.password);
   // neu mat khau khong dung thi tra ve thong bao loi
+  if (!isValidPassword) {
+    return response.status(400).json({ message: "Mat khau khong dung" });
+  }
+
+  const token = jwt.sign({ id: existUser._id }, "123456", { expiresIn: "30s" });
+  response.cookie("token", token, { httpOnly: true });
+
   // neu mat khau dung thi tra ve thong tin user dang nhap
+  existUser.password = undefined;
+  response.status(200).json({
+    message: "Dang nhap thanh cong",
+    user: existUser,
+    token,
+  });
 };
